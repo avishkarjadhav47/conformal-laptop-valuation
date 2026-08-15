@@ -1,0 +1,55 @@
+{
+  "test_mae": 9848.52,
+  "test_rmse": 15762.15,
+  "test_r2": 0.9275,
+  "conformal_interval_coverage_pct": 82.1,
+  "cv_leaderboard": [
+    {
+      "Model": "XGBoost",
+      "CV R2": 0.8787,
+      "CV MAE (log)": 0.1413,
+      "CV RMSE (log)": 0.2094
+    },
+    {
+      "Model": "Random Forest",
+      "CV R2": 0.8697,
+      "CV MAE (log)": 0.1456,
+      "CV RMSE (log)": 0.217
+    },
+    {
+      "Model": "Linear Regression",
+      "CV R2": 0.8513,
+      "CV MAE (log)": 0.1582,
+      "CV RMSE (log)": 0.2314
+    },
+    {
+      "Model": "Decision Tree",
+      "CV R2": 0.7714,
+      "CV MAE (log)": 0.1813,
+      "CV RMSE (log)": 0.286
+    }
+  ],
+  "segment_report": [
+    {
+      "Segment": "Budget",
+      "n": 63,
+      "MAE": 4493.72,
+      "R2": 0.574,
+      "MAPE %": 12.39
+    },
+    {
+      "Segment": "Mid-range",
+      "n": 65,
+      "MAE": 7844.71,
+      "R2": -0.737,
+      "MAPE %": 12.44
+    },
+    {
+      "Segment": "Premium",
+      "n": 51,
+      "MAE": 19017.14,
+      "R2": 0.863,
+      "MAPE %": 13.61
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+/* ================================
+   SpecWorth - Premium Dark Theme
+   ================================ */
+
+.stApp {
+    background-color: #0f172a;
+    color: #e5e7eb;
+}
+
+/* Main title */
+h1 {
+    color: #f8fafc;
+    font-weight: 700;
+    letter-spacing: -1px;
+}
+
+/* Section headings */
+h2, h3 {
+    color: #f1f5f9;
+    font-weight: 600;
+}
+
+/* Normal text */
+p, label {
+    color: #cbd5e1;
+}
+
+/* Metric cards */
+[data-testid="stMetric"] {
+    background-color: #1e293b;
+    padding: 18px;
+    border-radius: 12px;
+    border: 1px solid #334155;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.20);
+}
+
+/* Metric value */
+[data-testid="stMetricValue"] {
+    color: #f8fafc;
+}
+
+/* Metric label */
+[data-testid="stMetricLabel"] {
+    color: #94a3b8;
+}
+
+/* Buttons */
+.stButton > button {
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 8px 18px;
+}
+
+.stButton > button:hover {
+    background-color: #1d4ed8;
+    color: white;
+}
+
+/* Expanders */
+[data-testid="stExpander"] {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+}
+
+/* Tabs */
+button[data-baseweb="tab"] {
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #60a5fa;
+}
+
+/* Input boxes */
+[data-baseweb="select"] > div {
+    background-color: #1e293b;
+    border-color: #475569;
+}
+
+/* Dividers */
+hr {
+    border-color: #334155;
+}
