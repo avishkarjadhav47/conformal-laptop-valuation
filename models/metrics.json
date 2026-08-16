@@ -1,7 +1,7 @@
 {
-  "test_mae": 9848.52,
-  "test_rmse": 15762.15,
-  "test_r2": 0.9275,
+  "test_mae": 9892.82,
+  "test_rmse": 15627.23,
+  "test_r2": 0.9287,
   "conformal_interval_coverage_pct": 82.1,
   "cv_leaderboard": [
     {
@@ -33,23 +33,23 @@
     {
       "Segment": "Budget",
       "n": 63,
-      "MAE": 4493.72,
-      "R2": 0.574,
-      "MAPE %": 12.39
+      "MAE": 4709.58,
+      "R2": 0.452,
+      "MAPE %": 13.04
     },
     {
       "Segment": "Mid-range",
       "n": 65,
-      "MAE": 7844.71,
-      "R2": -0.737,
-      "MAPE %": 12.44
+      "MAE": 7486.4,
+      "R2": -0.539,
+      "MAPE %": 11.89
     },
     {
       "Segment": "Premium",
       "n": 51,
-      "MAE": 19017.14,
-      "R2": 0.863,
-      "MAPE %": 13.61
+      "MAE": 19362.65,
+      "R2": 0.865,
+      "MAPE %": 13.84
     }
   ]
 }
