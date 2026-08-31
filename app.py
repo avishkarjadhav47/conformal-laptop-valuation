@@ -1,3 +1,5 @@
+import json
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -22,17 +24,21 @@ load_css()
 
 @st.cache_resource
 def load_artifacts():
+    with open("models/metrics.json", "r", encoding="utf-8") as f:
+        metrics = json.load(f)
     return {
         "lookup_df": joblib.load("models/lookup_df.pkl"),
         "dropdowns": joblib.load("models/dropdowns.pkl"),
-        "price_model": joblib.load("models/price_model.pkl"),
-        "conformal_model": joblib.load("models/price_model_conformal.pkl"),
+        "model": joblib.load("models/price_model.pkl"),
         "conformal_quantile": joblib.load("models/conformal_quantile.pkl"),
         "model_columns": joblib.load("models/model_input_columns.pkl"),
         "reference": joblib.load("models/feature_reference.pkl"),
+        "metrics": metrics,
     }
 
+
 art = load_artifacts()
+m = art["metrics"]
 lookup_df = art["lookup_df"]
 dropdowns = art["dropdowns"]
 
@@ -54,12 +60,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+m = art["metrics"]
 a, b, c, d = st.columns(4)
 for col, icon, value, label in [
-    (a, "📈", "92.75%", "Test R²"),
-    (b, "💰", "₹9.85K", "Test MAE"),
-    (c, "🎯", "82.1%", "Interval coverage"),
-    (d, "💻", "893", "Indian listings"),
+    (a, "\U0001F4C8", f"{m['test_r2'] * 100:.2f}%", "Test R\u00b2"),
+    (b, "\U0001F4B0", f"\u20b9{m['test_mae'] / 1000:.2f}K", "Test MAE"),
+    (c, "\U0001F3AF", f"{m['conformal_interval_coverage_pct']:.1f}%", "Interval coverage"),
+    (d, "\U0001F4BB", f"{m['n_listings']}", "Indian listings"),
 ]:
     with col:
         st.markdown(
@@ -73,10 +80,7 @@ st.markdown("<div class='gap'></div>", unsafe_allow_html=True)
 def render_result(row, art, listed_price=None):
     input_df = to_model_frame(row, art["model_columns"])
     point, lo, hi = predict_with_interval(
-        art["price_model"],
-        art["conformal_model"],
-        art["conformal_quantile"],
-        input_df,
+        art["model"], art["conformal_quantile"], input_df
     )
 
     st.markdown("""
@@ -127,7 +131,7 @@ def render_result(row, art, listed_price=None):
 
     with st.expander("🔎 Why did the model predict this price?", expanded=True):
         contributions = explain_prediction(
-            art["price_model"], input_df, art["reference"]
+            art["model"], input_df, art["reference"]
         )
         if not contributions:
             st.info("This configuration is close to a typical laptop.")
@@ -294,12 +298,20 @@ with tab_deal:
 
 # ---------------- FOOTER ----------------
 with st.expander("ℹ️  About SpecWorth"):
+    _target = int((1 - m["conformal_alpha"]) * 100)
     st.markdown(
-        "**SpecWorth** is an explainable laptop valuation system trained on "
-        "approximately **893 Indian-market listings**. The point estimate uses "
-        "XGBoost on log-transformed prices, while the prediction range uses "
-        "**split conformal calibration** targeting 80% coverage. "
-        "The held-out test set achieved **82.1% empirical interval coverage**."
+        f"**SpecWorth** estimates laptop fair value from hardware specifications, "
+        f"trained on **{m['n_listings']} Indian-market listings**. XGBoost on "
+        f"log-transformed prices produces the point estimate; the range comes from "
+        f"**split conformal calibration** on a held-out set of {m['n_cal']} listings, "
+        f"targeting {_target}% coverage. Observed coverage on the untouched "
+        f"{m['n_test']}-listing test set was "
+        f"**{m['conformal_interval_coverage_pct']:.1f}%**.\n\n"
+        f"The point estimate and the interval come from the *same* model, which is what "
+        f"makes that coverage figure meaningful. With only {m['n_cal']} calibration "
+        f"points the conformal quantile is itself a noisy estimate, so a gap of a few "
+        f"points from the {_target}% target is expected rather than evidence of "
+        f"conservative intervals."
     )
 
 st.markdown(

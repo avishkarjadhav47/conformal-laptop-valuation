@@ -1,55 +1,67 @@
 {
-  "test_mae": 9892.82,
-  "test_rmse": 15627.23,
-  "test_r2": 0.9287,
-  "conformal_interval_coverage_pct": 82.1,
+  "n_listings": 893,
+  "n_fit": 571,
+  "n_cal": 143,
+  "n_test": 179,
+  "test_mae": 9842.09,
+  "test_rmse": 15883.78,
+  "test_r2": 0.9264,
+  "conformal_alpha": 0.2,
+  "conformal_quantile_log": 0.2264,
+  "conformal_interval_coverage_pct": 86.6,
+  "best_params": {
+    "learning_rate": 0.1,
+    "max_depth": 4,
+    "min_child_weight": 3,
+    "n_estimators": 200
+  },
   "cv_leaderboard": [
     {
       "Model": "XGBoost",
-      "CV R2": 0.8787,
-      "CV MAE (log)": 0.1413,
-      "CV RMSE (log)": 0.2094
+      "CV R2": 0.8771,
+      "CV MAE (log)": 0.1419,
+      "CV RMSE (log)": 0.2106
     },
     {
       "Model": "Random Forest",
-      "CV R2": 0.8697,
-      "CV MAE (log)": 0.1456,
-      "CV RMSE (log)": 0.217
+      "CV R2": 0.8711,
+      "CV MAE (log)": 0.1449,
+      "CV RMSE (log)": 0.216
     },
     {
       "Model": "Linear Regression",
-      "CV R2": 0.8513,
-      "CV MAE (log)": 0.1582,
-      "CV RMSE (log)": 0.2314
+      "CV R2": 0.855,
+      "CV MAE (log)": 0.1566,
+      "CV RMSE (log)": 0.2284
     },
     {
       "Model": "Decision Tree",
-      "CV R2": 0.7714,
-      "CV MAE (log)": 0.1813,
-      "CV RMSE (log)": 0.286
+      "CV R2": 0.7886,
+      "CV MAE (log)": 0.1765,
+      "CV RMSE (log)": 0.2753
     }
   ],
   "segment_report": [
     {
       "Segment": "Budget",
       "n": 63,
-      "MAE": 4709.58,
-      "R2": 0.452,
-      "MAPE %": 13.04
+      "MAE": 5087.83,
+      "R2": 0.355,
+      "MAPE %": 14.17
     },
     {
       "Segment": "Mid-range",
       "n": 65,
-      "MAE": 7486.4,
-      "R2": -0.539,
-      "MAPE %": 11.89
+      "MAE": 6618.87,
+      "R2": -0.061,
+      "MAPE %": 10.58
     },
     {
       "Segment": "Premium",
       "n": 51,
-      "MAE": 19362.65,
-      "R2": 0.865,
-      "MAPE %": 13.84
+      "MAE": 19823.01,
+      "R2": 0.853,
+      "MAPE %": 13.51
     }
   ]
 }

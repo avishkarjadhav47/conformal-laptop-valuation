@@ -139,21 +139,30 @@ ColumnTransformer
         └── Binary → Passthrough
         │
         ▼
-Random Forest Feature Selection
+Cross-Validated Model Comparison  (5-fold)
+        │
+        │   every step below is refit inside each fold,
+        │   so nothing is learned from the validation half
+        │
+        ├── ColumnTransformer
+        ├── Random Forest Feature Selection
+        └── Estimator
+              ├── Linear Regression
+              ├── Decision Tree
+              ├── Random Forest
+              └── XGBoost
         │
         ▼
-Cross-Validated Model Comparison
-        │
-        ├── Linear Regression
-        ├── Decision Tree
-        ├── Random Forest
-        └── XGBoost
+XGBoost Hyperparameter Tuning  (GridSearchCV over the same pipeline)
         │
         ▼
-XGBoost Hyperparameter Tuning
+Fit / Calibration Split
+        │
+        ├── Final model fit on the fit half
+        └── Conformal quantile from the calibration half
         │
         ▼
-Final Price Prediction
+Point Estimate + 80% Interval  (same model)
         │
         ├── Baseline Comparison
         ├── Global Metrics
@@ -175,13 +184,15 @@ Streamlit Application
 
 ## 📊 Model Performance
 
-The final tuned XGBoost model was evaluated on a held-out test set.
+The deployed model was evaluated on the untouched test set. Note the data budget: the
+model is fit on 571 listings, 143 are reserved to calibrate the conformal
+quantile, and 179 are held out for this evaluation.
 
 | Metric | Result |
 |---|---:|
-| **R²** | **0.9275** |
-| **MAE** | **₹9,848.52** |
-| **RMSE** | **₹15,762.15** |
+| **R²** | **0.9264** |
+| **MAE** | **₹9,842.09** |
+| **RMSE** | **₹15,883.78** |
 
 A naive baseline was also implemented by predicting the **mean training-set price for every test observation**, providing a reference point against which the final XGBoost model can be evaluated.
 
@@ -193,10 +204,12 @@ Four regression models were evaluated using 5-fold cross-validation on the log-t
 
 | Model | CV R² | CV MAE (log) | CV RMSE (log) |
 |---|---:|---:|---:|
-| **XGBoost** | **0.8787** | **0.1413** | **0.2094** |
-| Random Forest | 0.8697 | 0.1456 | 0.2170 |
-| Linear Regression | 0.8513 | 0.1582 | 0.2314 |
-| Decision Tree | 0.7714 | 0.1813 | 0.2860 |
+| **XGBoost** | **0.8771** | **0.1419** | **0.2106** |
+| Random Forest | 0.8711 | 0.1449 | 0.216 |
+| Linear Regression | 0.855 | 0.1566 | 0.2284 |
+| Decision Tree | 0.7886 | 0.1765 | 0.2753 |
+
+Every step of the pipeline — imputation, scaling, one-hot encoding and feature selection — is refit inside each fold, so nothing is learned from the validation half.
 
 XGBoost achieved the strongest cross-validation R² among the evaluated models and was subsequently selected for hyperparameter tuning.
 
@@ -210,10 +223,10 @@ The selected configuration was:
 
 | Parameter | Value |
 |---|---:|
-| `n_estimators` | 300 |
+| `n_estimators` | 200 |
 | `learning_rate` | 0.1 |
 | `max_depth` | 4 |
-| `min_child_weight` | 5 |
+| `min_child_weight` | 3 |
 
 The final tuned model was then evaluated on the untouched test set.
 
@@ -241,30 +254,22 @@ Therefore, model training occurs in log-price space while final business-facing 
 
 ## 📉 Segment-Wise Error Analysis
 
-A single global metric can hide differences in model performance across different price ranges.
-
-The dataset is therefore divided into three price segments:
-
-- **Budget**
-- **Mid-range**
-- **Premium**
-
-The model is evaluated separately using:
-
-- MAE
-- R²
-- MAPE
-
-Current held-out test-set results:
-
-| Segment | Samples | MAE | R² | MAPE |
+| Segment | n | MAE | R² | MAPE |
 |---|---:|---:|---:|---:|
-| Budget | 63 | ₹4,493.72 | 0.574 | 12.39% |
-| Mid-range | 65 | ₹7,844.71 | -0.737 | 12.44% |
-| Premium | 51 | ₹19,017.14 | 0.863 | 13.61% |
+| Budget | 63 | ₹5,087.83 | 0.355 | 14.17% |
+| Mid-range | 65 | ₹6,618.87 | -0.061 | 10.58% |
+| Premium | 51 | ₹19,823.01 | 0.853 | 13.51% |
 
-This analysis highlights why relying solely on global R² can be misleading. In particular, the mid-range subset shows unstable R² despite having a relative error comparable to the other segments.
+R² is **not comparable across these segments**, and the negative mid-range value is
+structural rather than a sign of failure. Segments are price terciles, so the middle
+band has the narrowest range of actual prices and therefore the smallest total sum of
+squares. Dividing a similar squared error by a much smaller denominator drives R²
+negative by construction. Sample size is not the cause — the mid-range segment has the
+*most* test observations of the three.
 
+MAPE is the metric to compare across segments, and it is roughly flat, which is the
+honest reading: relative accuracy is similar everywhere, while absolute error scales
+with price level.
 ---
 
 ## 📏 Uncertainty Estimation with Conformal Prediction
@@ -272,6 +277,8 @@ This analysis highlights why relying solely on global R² can be misleading. In 
 A point prediction alone does not communicate how uncertain the estimate is.
 
 SpecWorth therefore uses **split conformal prediction** to construct an approximately 80% prediction interval around the estimated price.
+
+The point estimate and the interval bounds are produced by the **same** model — the one whose calibration residuals set the conformal quantile. This is what makes the reported coverage figure meaningful: centring the interval on a different, better-fit model would void the guarantee.
 
 ### Workflow
 
@@ -297,9 +304,16 @@ Model-Fitting     Calibration
 
 The resulting conformal interval achieved:
 
-> **82.1% empirical coverage on the held-out test set**
+> **86.6% empirical coverage on the 179-listing held-out test set** (target 80%)
 
-The target coverage was 80%, making the observed result reasonably close to the intended coverage.
+Two caveats worth stating plainly. First, the finite-sample rule selects the
+⌈(n+1)(1−α)⌉-th of 143 sorted calibration residuals, so the quantile actually
+targets roughly 80.6% rather than exactly 80% — mild over-coverage is built in.
+Second, with only 143 calibration points the quantile is itself a noisy estimate, and
+this particular fit/calibration split landed on the conservative side. The intervals are
+therefore somewhat wider than strictly necessary. Over-coverage is the safe direction, but
+it should not be read as evidence of a well-centred interval; averaging coverage over
+repeated random splits would give a more defensible figure.
 
 The interval is designed to communicate uncertainty rather than simply displaying a fixed percentage margin around the predicted price.
 
@@ -463,15 +477,13 @@ SpecWorth/
 ├── requirements.txt
 ├── README.md
 │
-├── notebooks/
-│   └── laptop_price_prediction.ipynb
+├── main.ipynb
 │
 ├── data/
 │   └── laptops_raw.csv
 │
 └── models/
     ├── price_model.pkl
-    ├── price_model_conformal.pkl
     ├── conformal_quantile.pkl
     ├── model_input_columns.pkl
     ├── lookup_df.pkl
@@ -488,10 +500,9 @@ SpecWorth/
 | `utils.py` | Application-side feature construction, prediction, explanation, and deal scoring |
 | `feature_engineering.py` | Shared CPU, processor, GPU, PPI, and OS feature extraction |
 | `requirements.txt` | Python dependencies |
-| `notebooks/` | Complete model training and evaluation pipeline |
+| `main.ipynb` | Complete model training, calibration, and evaluation pipeline |
 | `data/` | Raw laptop dataset |
-| `price_model.pkl` | Final point-prediction model |
-| `price_model_conformal.pkl` | Model used for conformal interval prediction |
+| `price_model.pkl` | Deployed model — produces both the point estimate and the interval |
 | `conformal_quantile.pkl` | Conformal calibration value |
 | `model_input_columns.pkl` | Expected model input schema |
 | `lookup_df.pkl` | Cleaned listing catalog used by the application |
@@ -614,7 +625,7 @@ The Streamlit application will launch in your browser.
 The notebook:
 
 ```text
-notebooks/laptop_price_prediction.ipynb
+main.ipynb
 ```
 
 contains the complete training workflow.
@@ -676,7 +687,8 @@ Despite strong test-set performance, the system has several limitations:
 - The model learns relationships present in the dataset and may not generalize equally well to future market conditions.
 - Brand effects may reflect market positioning present in the source data rather than intrinsic hardware value.
 - The prediction interval provides uncertainty around the model's estimate; it does not guarantee that a listing will actually sell at that price.
-- Segment-level metrics can be unstable because each segment contains a relatively small number of test observations.
+- Segment-level R² is not comparable across segments: the segments are price terciles, so the middle band has the narrowest price range and therefore the smallest total sum of squares. MAPE is the metric to read across segments.
+- The conformal quantile is calibrated on a small held-out set, so it is itself a noisy estimate; a few points of deviation from the target coverage is expected.
 
 Therefore, SpecWorth should be interpreted as a **data-driven valuation and decision-support system**, not a guaranteed market-price oracle.
 

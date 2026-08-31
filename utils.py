@@ -1,7 +1,7 @@
 """
 App-side helpers.
 Turns raw, human-typed specs into a model-ready row, gets a point prediction
-plus an 80% prediction interval, explains the prediction (perturbation-based
+plus a calibrated 80% prediction interval, explains the prediction (perturbation-based
 local feature contribution — a from-scratch stand-in for SHAP), and scores
 a real listing against the model's estimate.
 """
@@ -98,34 +98,29 @@ def to_model_frame(row: dict, model_columns: list) -> pd.DataFrame:
     return pd.DataFrame([row])[model_columns]
 
 
-def predict_with_interval(
-    price_model,
-    conformal_model,
-    conformal_quantile,
-    input_df: pd.DataFrame
-    ):
-    # Point prediction
-    point_log = float(price_model.predict(input_df)[0])
+def predict_with_interval(model, conformal_quantile, input_df: pd.DataFrame):
+    """
+    Point estimate plus an 80% prediction interval from a SINGLE model.
+
+    Split-conformal validity requires the interval to be centred on the same
+    model whose calibration residuals produced `conformal_quantile`. Centring
+    it on a different (better-fit) model would void the coverage guarantee,
+    so the point estimate and both bounds all come from `model`.
+
+    The interval is symmetric in log space, so on the rupee scale it is
+    asymmetric around the point estimate. That is expected, not a bug.
+    """
+    point_log = float(model.predict(input_df)[0])
+
     point = float(np.expm1(point_log))
+    lo = float(np.expm1(point_log - conformal_quantile))
+    hi = float(np.expm1(point_log + conformal_quantile))
 
-    # Conformal prediction
-    conformal_log = float(conformal_model.predict(input_df)[0])
-
-    lower_log = conformal_log - conformal_quantile
-    upper_log = conformal_log + conformal_quantile
-
-    lo = float(np.expm1(lower_log))
-    hi = float(np.expm1(upper_log))
-
-    # Safety guards
-    lo = max(0.0, lo)
-    lo = min(lo, point)
-    hi = max(hi, point)
-
-    return point, lo, hi
+    # expm1 is monotonic, so lo < point < hi holds by construction -- no clamps.
+    return point, max(0.0, lo), hi
 
 
-def explain_prediction(price_model, input_df: pd.DataFrame, reference: dict, top_n: int = 5):
+def explain_prediction(model, input_df: pd.DataFrame, reference: dict, top_n: int = 5):
     """
     Perturbation-based local explanation: for each feature, swap in the
     "typical" (median/mode) value from the training set and measure how
@@ -135,7 +130,7 @@ def explain_prediction(price_model, input_df: pd.DataFrame, reference: dict, top
     for SHAP — same idea (marginal contribution of a feature), simpler
     estimator (one-at-a-time swap instead of averaging over coalitions).
     """
-    base_pred = float(np.expm1(price_model.predict(input_df)[0]))
+    base_pred = float(np.expm1(model.predict(input_df)[0]))
     contributions = []
 
     for col in input_df.columns:
@@ -143,7 +138,7 @@ def explain_prediction(price_model, input_df: pd.DataFrame, reference: dict, top
             continue
         perturbed = input_df.copy()
         perturbed.at[perturbed.index[0], col] = reference[col]
-        perturbed_pred = float(np.expm1(price_model.predict(perturbed)[0]))
+        perturbed_pred = float(np.expm1(model.predict(perturbed)[0]))
         delta = base_pred - perturbed_pred  # how much this feature's actual value adds vs. "typical"
         if abs(delta) > 1:  # ignore near-zero noise
             contributions.append((col, delta))
