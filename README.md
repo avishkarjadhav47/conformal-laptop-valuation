@@ -6,7 +6,6 @@
 Live Link :- https://specworth-explainable-laptop-valuation-uncertainty-estimation.streamlit.app/
 
 ## 📌 Overview
-
 **SpecWorth** is an end-to-end machine learning project for **laptop fair-price estimation** using real-world Indian-market laptop listings.
 
 Instead of treating laptop price prediction as a simple regression problem, SpecWorth builds a complete ML workflow:
@@ -28,8 +27,9 @@ The project is designed as a **complete ML application**, not just a notebook-ba
 
 ---
 
-## 🎯 Problem Statement
+---
 
+## 🎯 Problem Statement
 Laptop specifications are often presented as a mixture of structured and unstructured information:
 
 - CPU descriptions
@@ -53,8 +53,9 @@ The system additionally answers:
 
 ---
 
-## ✨ Key Features
+---
 
+## ✨ Key Features
 ### 1. Domain-Specific Feature Engineering
 
 Raw specification strings are transformed into meaningful numerical and categorical features.
@@ -107,8 +108,120 @@ Resolution and screen size are transformed into:
 
 ---
 
-## 🧠 Machine Learning Pipeline
+---
 
+## 📊 Model Performance
+The deployed model was evaluated on the untouched test set. Note the data budget: the
+model is fit on 571 listings, 143 are reserved to calibrate the conformal
+quantile, and 179 are held out for this evaluation.
+
+| Metric | Result |
+|---|---:|
+| **R²** | **0.9264** |
+| **MAE** | **₹9,842.09** |
+| **RMSE** | **₹15,883.78** |
+
+A naive baseline was also implemented by predicting the **mean training-set price for every test observation**, providing a reference point against which the final XGBoost model can be evaluated.
+
+---
+
+---
+
+## 📏 Uncertainty Estimation with Conformal Prediction
+A point prediction alone does not communicate how uncertain the estimate is.
+
+SpecWorth therefore uses **split conformal prediction** to construct an approximately 80% prediction interval around the estimated price.
+
+The point estimate and the interval bounds are produced by the **same** model — the one whose calibration residuals set the conformal quantile. This is what makes the reported coverage figure meaningful: centring the interval on a different, better-fit model would void the guarantee.
+
+### Workflow
+
+```text
+Training Data
+     │
+     ├───────────────┐
+     ▼               ▼
+Model-Fitting     Calibration
+     │               │
+     │          Calibration Errors
+     │               │
+     └───────┬───────┘
+             ▼
+       Conformal Quantile
+             │
+             ▼
+      Held-Out Test Set
+             │
+             ▼
+   Lower ─ Point ─ Upper
+```
+
+The resulting conformal interval achieved:
+
+> **86.6% empirical coverage on the 179-listing held-out test set** (target 80%)
+
+Two caveats worth stating plainly. First, the finite-sample rule selects the
+⌈(n+1)(1−α)⌉-th of 143 sorted calibration residuals, so the quantile actually
+targets roughly 80.6% rather than exactly 80% — mild over-coverage is built in.
+Second, with only 143 calibration points the quantile is itself a noisy estimate, and
+this particular fit/calibration split landed on the conservative side. The intervals are
+therefore somewhat wider than strictly necessary. Over-coverage is the safe direction, but
+it should not be read as evidence of a well-centred interval; averaging coverage over
+repeated random splits would give a more defensible figure.
+
+The interval is designed to communicate uncertainty rather than simply displaying a fixed percentage margin around the predicted price.
+
+---
+
+---
+
+## 📉 Segment-Wise Error Analysis
+| Segment | n | MAE | R² | MAPE |
+|---|---:|---:|---:|---:|
+| Budget | 63 | ₹5,087.83 | 0.355 | 14.17% |
+| Mid-range | 65 | ₹6,618.87 | -0.061 | 10.58% |
+| Premium | 51 | ₹19,823.01 | 0.853 | 13.51% |
+
+R² is **not comparable across these segments**, and the negative mid-range value is
+structural rather than a sign of failure. Segments are price terciles, so the middle
+band has the narrowest range of actual prices and therefore the smallest total sum of
+squares. Dividing a similar squared error by a much smaller denominator drives R²
+negative by construction. Sample size is not the cause — the mid-range segment has the
+*most* test observations of the three.
+
+MAPE is the metric to compare across segments, and it is roughly flat, which is the
+honest reading: relative accuracy is similar everywhere, while absolute error scales
+with price level.
+---
+
+---
+
+## 🔄 Training–Inference Consistency
+A key design decision is keeping feature-engineering logic centralized in:
+
+```text
+feature_engineering.py
+```
+
+The same functions are used by both:
+
+```text
+Training Notebook
+       │
+       └── feature_engineering.py
+
+Streamlit Application
+       │
+       └── feature_engineering.py
+```
+
+This prevents **training-serving feature drift**, where the features generated during application inference differ from those used during model training.
+
+---
+
+---
+
+## 🧠 Machine Learning Pipeline
 ```text
 Raw Laptop Listings
         │
@@ -182,24 +295,9 @@ Streamlit Application
 
 ---
 
-## 📊 Model Performance
-
-The deployed model was evaluated on the untouched test set. Note the data budget: the
-model is fit on 571 listings, 143 are reserved to calibrate the conformal
-quantile, and 179 are held out for this evaluation.
-
-| Metric | Result |
-|---|---:|
-| **R²** | **0.9264** |
-| **MAE** | **₹9,842.09** |
-| **RMSE** | **₹15,883.78** |
-
-A naive baseline was also implemented by predicting the **mean training-set price for every test observation**, providing a reference point against which the final XGBoost model can be evaluated.
-
 ---
 
 ## 📈 Model Comparison
-
 Four regression models were evaluated using 5-fold cross-validation on the log-transformed target.
 
 | Model | CV R² | CV MAE (log) | CV RMSE (log) |
@@ -215,8 +313,9 @@ XGBoost achieved the strongest cross-validation R² among the evaluated models a
 
 ---
 
-## ⚙️ Hyperparameter Optimization
+---
 
+## ⚙️ Hyperparameter Optimization
 The XGBoost model was tuned using `GridSearchCV`.
 
 The selected configuration was:
@@ -232,8 +331,9 @@ The final tuned model was then evaluated on the untouched test set.
 
 ---
 
-## 🎯 Target Transformation
+---
 
+## 🎯 Target Transformation
 Laptop prices exhibit a right-skewed distribution.
 
 To reduce the influence of extreme prices and provide a more stable regression target, the project uses:
@@ -252,75 +352,9 @@ Therefore, model training occurs in log-price space while final business-facing 
 
 ---
 
-## 📉 Segment-Wise Error Analysis
-
-| Segment | n | MAE | R² | MAPE |
-|---|---:|---:|---:|---:|
-| Budget | 63 | ₹5,087.83 | 0.355 | 14.17% |
-| Mid-range | 65 | ₹6,618.87 | -0.061 | 10.58% |
-| Premium | 51 | ₹19,823.01 | 0.853 | 13.51% |
-
-R² is **not comparable across these segments**, and the negative mid-range value is
-structural rather than a sign of failure. Segments are price terciles, so the middle
-band has the narrowest range of actual prices and therefore the smallest total sum of
-squares. Dividing a similar squared error by a much smaller denominator drives R²
-negative by construction. Sample size is not the cause — the mid-range segment has the
-*most* test observations of the three.
-
-MAPE is the metric to compare across segments, and it is roughly flat, which is the
-honest reading: relative accuracy is similar everywhere, while absolute error scales
-with price level.
----
-
-## 📏 Uncertainty Estimation with Conformal Prediction
-
-A point prediction alone does not communicate how uncertain the estimate is.
-
-SpecWorth therefore uses **split conformal prediction** to construct an approximately 80% prediction interval around the estimated price.
-
-The point estimate and the interval bounds are produced by the **same** model — the one whose calibration residuals set the conformal quantile. This is what makes the reported coverage figure meaningful: centring the interval on a different, better-fit model would void the guarantee.
-
-### Workflow
-
-```text
-Training Data
-     │
-     ├───────────────┐
-     ▼               ▼
-Model-Fitting     Calibration
-     │               │
-     │          Calibration Errors
-     │               │
-     └───────┬───────┘
-             ▼
-       Conformal Quantile
-             │
-             ▼
-      Held-Out Test Set
-             │
-             ▼
-   Lower ─ Point ─ Upper
-```
-
-The resulting conformal interval achieved:
-
-> **86.6% empirical coverage on the 179-listing held-out test set** (target 80%)
-
-Two caveats worth stating plainly. First, the finite-sample rule selects the
-⌈(n+1)(1−α)⌉-th of 143 sorted calibration residuals, so the quantile actually
-targets roughly 80.6% rather than exactly 80% — mild over-coverage is built in.
-Second, with only 143 calibration points the quantile is itself a noisy estimate, and
-this particular fit/calibration split landed on the conservative side. The intervals are
-therefore somewhat wider than strictly necessary. Over-coverage is the safe direction, but
-it should not be read as evidence of a well-centred interval; averaging coverage over
-repeated random splits would give a more defensible figure.
-
-The interval is designed to communicate uncertainty rather than simply displaying a fixed percentage margin around the predicted price.
-
 ---
 
 ## 🔍 Model Explainability
-
 SpecWorth provides two levels of interpretability.
 
 ### Global Feature Importance
@@ -370,8 +404,9 @@ This allows the application to communicate which characteristics are pushing a p
 
 ---
 
-## 💰 Deal Detection
+---
 
+## 💰 Deal Detection
 SpecWorth also evaluates real listings against the model's estimated fair price.
 
 The system calculates:
@@ -398,8 +433,9 @@ This turns the model from a simple regression system into a practical **price de
 
 ---
 
-## 🖥️ Streamlit Application
+---
 
+## 🖥️ Streamlit Application
 The project includes an interactive Streamlit application with three workflows.
 
 ### 🗂️ Quick Pick
@@ -441,32 +477,9 @@ Enter a real laptop listing and its listed price to determine whether it appears
 
 ---
 
-## 🔄 Training–Inference Consistency
-
-A key design decision is keeping feature-engineering logic centralized in:
-
-```text
-feature_engineering.py
-```
-
-The same functions are used by both:
-
-```text
-Training Notebook
-       │
-       └── feature_engineering.py
-
-Streamlit Application
-       │
-       └── feature_engineering.py
-```
-
-This prevents **training-serving feature drift**, where the features generated during application inference differ from those used during model training.
-
 ---
 
 ## 📁 Project Structure
-
 ```text
 SpecWorth/
 │
@@ -512,8 +525,9 @@ SpecWorth/
 
 ---
 
-## 🗃️ Dataset
+---
 
+## 🗃️ Dataset
 **Source:** [Kaggle — Laptop Price Prediction Dataset](https://www.kaggle.com/datasets/jacksondivakarr/laptop-price-prediction-dataset)
 
 The project uses:
@@ -539,8 +553,9 @@ The raw dataset is cleaned and transformed before modeling.
 
 ---
 
-## 🛠️ Tech Stack
+---
 
+## 🛠️ Tech Stack
 ### Programming
 
 - Python
@@ -571,8 +586,9 @@ The raw dataset is cleaned and transformed before modeling.
 
 ---
 
-## ⚙️ Installation
+---
 
+## ⚙️ Installation
 ### 1. Clone the repository
 
 ```bash
@@ -608,8 +624,9 @@ pip install -r requirements.txt
 
 ---
 
-## ▶️ Run the Application
+---
 
+## ▶️ Run the Application
 From the project root:
 
 ```bash
@@ -620,8 +637,9 @@ The Streamlit application will launch in your browser.
 
 ---
 
-## 🧪 Reproducing the Training Pipeline
+---
 
+## 🧪 Reproducing the Training Pipeline
 The notebook:
 
 ```text
@@ -652,8 +670,9 @@ Run the notebook from top to bottom to:
 
 ---
 
-## 📌 Key Design Decisions
+---
 
+## 📌 Key Design Decisions
 ### Why XGBoost?
 
 The dataset contains a mixture of numerical, categorical, and engineered features with potentially nonlinear relationships.
@@ -678,8 +697,9 @@ A strong global metric can hide poor performance in specific price ranges. Segme
 
 ---
 
-## ⚠️ Limitations
+---
 
+## ⚠️ Limitations
 Despite strong test-set performance, the system has several limitations:
 
 - The dataset contains only 893 listings.
@@ -694,8 +714,9 @@ Therefore, SpecWorth should be interpreted as a **data-driven valuation and deci
 
 ---
 
-## 🚀 Future Improvements
+---
 
+## 🚀 Future Improvements
 Potential extensions include:
 
 - Larger and more recent laptop datasets
@@ -711,24 +732,27 @@ Potential extensions include:
 
 ---
 
-## 📜 License
+---
 
+## 📜 License
 This project is intended for educational, portfolio, and demonstration purposes.
 
 The underlying dataset is sourced from Kaggle and remains subject to its original licensing and usage terms.
 
 ---
 
-## 👤 Author
+---
 
+## 👤 Author
 **Avishkar Jadhav**
 
 Machine Learning • Data Science • Mathematical Computing
 
 ---
 
-## ⭐ Project Summary
+---
 
+## ⭐ Project Summary
 ```text
                     SPECWORTH
                        │
