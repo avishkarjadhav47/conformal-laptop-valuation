@@ -592,7 +592,7 @@ The raw dataset is cleaned and transformed before modeling.
 ### 1. Clone the repository
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone <https://github.com/avishkarjadhav47/conformal-laptop-valuation>
 cd SpecWorth
 ```
 
